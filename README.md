@@ -5,7 +5,7 @@ This repository is part of a spatial project exploring the topic of building ren
 
 The script in this repository does the following:
 
-1. Creates a map showing the buildings in Copenhagen which have undergone building renewal.
+1. Creates a map showing the buildings in Copenhagen which have undergone building renewal and areas of Copenhagen considered socially vulnerable today. 
 2. Transforms and combines two CSV files showing the number of buildings older than 1899 per district.
 3. Combines this data with spatial data showing the different districts of Copenhagen. Makes an accompanying map.
 
