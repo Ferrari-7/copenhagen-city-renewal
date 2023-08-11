@@ -1,0 +1,283 @@
+---
+title: "Building Renewal Copenhagen"
+author: "Maria Ferrari Munksø"
+date: "August 2023"
+output: 
+  rmdformats::readthedown:
+    highlight: kate
+---
+```{r setup, include=FALSE}
+library(knitr)
+library(rmdformats)
+
+## Global options
+options(max.print="75")
+opts_chunk$set(echo=TRUE,
+	             cache=TRUE,
+               prompt=FALSE,
+               tidy=TRUE,
+               comment=NA,
+               message=FALSE,
+               warning=FALSE)
+opts_knit$set(width=75)
+```
+
+
+# Introduction
+
+The script in this R Markdown document is a part of a spatial project exploring the topic of building renewal in Copenhagen.
+
+The script in this document does the following:
+
+1. Creates a map showing the buildings in Copenhagen which have undergone building renewal.
+2. Transforms and combines two CSV files showing the number of buildings older than 1899 per district.
+3. Combines this data with spatial data showing the different districts of Copenhagen. Makes an accompanying map.
+
+## Data used
+
+The data used has been created by Copenhagen Municipality.
+
+* Københavns Kommunes Statistikbank. “KKBYG1.” Accessed August 11, 2023.
+https://kk.statistikbank.dk/statbank5a/SelectVarVal/Define.asp?MainTable=KKBYG1&PLanguage=0&PXSId=0&wsid=cflist.
+* Open Data DK. “Bydele.” Accessed August 11, 2023,
+https://www.opendata.dk/city-of-copenhagen/bydele.
+* Open Data DK. “Byfornyelse.” Accessed August 11, 2023. 
+https://www.opendata.dk/city-of-copenhagen/byfornyelse#resource-byfornyelse.  
+* Open Data DK. “Udsatte byområder.” Accessed August 11, 2023. 
+https://www.opendata.dk/city-of-copenhagen/udsatte-byomrader.
+
+License: 
+Attribution 4.0 International (CC BY 4.0): 
+https://creativecommons.org/licenses/by/4.0/
+
+# Loading Packages
+
+Firstly, I need to load the packages for this spatial project.
+The following packages have been used: 
+
+* tidyverse (1.3.0)
+* sf (1.0-6) for processing the spatial data
+* rgdal (1.5-28) for reading spatial data
+* leaflet (2.1.0) for creating the maps. 
+
+```{r}
+library(tidyverse) # (version 1.3.0)
+library(sf) # for reading spatial data (version 1.0-6)
+library(rgdal) # also for reading spatial data (version 1.5-28)
+library(leaflet) # for making the maps (version 2.1.0)
+```
+
+# Building Renewal and Vulnerable Areas
+
+## Reading the spatial data
+
+I'm going to read the spatial data downloaded from Open Data DK by using the readLines function. 
+(resource consulted: https://rstudio.github.io/leaflet/json.html )
+
+```{r}
+# loading the spatial file showing renewed buildings
+building_renewal <-  readLines("data/byfornyelse_kk.json") %>%
+  paste(collapse = "\n")
+```
+
+```{r}
+# loading the spatial file showing vulnerable areas
+vulnerable_areas <-  readLines("data/f_udsatte_byomraader.json") %>%
+  paste(collapse = "\n")
+```
+
+## Creating the Leaflet map
+
+Then I'm create the map using Leaflet.
+
+```{r}
+leaflet() %>%
+      addTiles() %>% # adding basic tiles
+      setView(lng = 12.52840564444299, lat = 55.658326021508024, zoom = 11) %>% #setting coordinates
+      addGeoJSON(building_renewal, weight = 2, fillOpacity = 1) %>% # adding geojson feature
+      addGeoJSON(vulnerable_areas, color = "#ED2828", weight = 1) # adding second geojson feature
+```
+
+
+# Building Renewal and Building Ages
+
+## Loading data
+
+### District map
+
+The first file I will need to load is the geojson file from Open Data DK showing the different districts of Copenhagen. I am reading it using rgdal this time since I am going to combine it with non spatial data. By using rgdal I also get access to more functions of customization.
+(resource consulted: https://rstudio.github.io/leaflet/json.html )
+
+```{r}
+districts <- rgdal::readOGR("data/bydel.json")
+```
+
+Here is the spatial data showing the city districts on its own:
+
+```{r, echo = FALSE}
+city_districts <- readLines("data/bydel.json") %>%
+  paste(collapse = "\n")
+```
+```{r, echo = FALSE}
+leaflet() %>%
+  addTiles() %>%
+  setView(lng = 12.52840564444299, lat = 55.658326021508024, zoom = 10) %>% 
+  addGeoJSON(city_districts, weight = 1)
+```
+
+
+### Ages of buildings
+
+Next, I will load the CSV files showing the ages of the buildings.
+
+```{r}
+# CSV file containing the number of buildings older than 1850
+bfr1850 <-  read.csv2("data/before_1850.csv") 
+```
+
+```{r}
+# CSV containing the number of buildings fra 1850-1899
+from1850to1899 <-  read.csv2("data/1850-1899.csv")
+```
+
+## Data wrangling
+
+### Selecting the year 2023
+
+The CSV files contains information on the number of buildings registered from 1991 to 2023. I have chosen to use 2023 since it appears like there was a lot of building registration done in 2017, and I want the data to be as complete as possible.
+
+I am going the use the filter function to only include that year.
+
+```{r}
+bfr1850 <- filter(bfr1850, TID == "2023") # selecting column TID (time) and selecting year 2023
+```
+
+```{r}
+from1850to1899 <- filter(from1850to1899, TID == "2023")
+```
+
+### Selecting the rows showing the districts
+
+The CSV file contains a lot of additional information besides the information on the ten districts. I am going to select the rows where the name start with "bydel" (district)
+
+(tutorial consulted: https://stackoverflow.com/questions/28860069/regular-expressions-regex-and-dplyrfilter )
+
+```{r}
+bfr1850 <- bfr1850 %>%
+  # selecting the column OMRKK (area CPH) and choosing the rows starting with "bydel" (district)
+  filter(str_detect(OMRKK, "Bydel")) %>%
+  # there is an additional row called "outside districts" which I need to remove
+  filter(OMRKK != "Bydel - Uden for inddeling")
+```
+
+```{r}
+from1850to1899 <- from1850to1899 %>%
+  filter(str_detect(OMRKK, "Bydel")) %>% 
+  filter(TID == "2023") %>% 
+  filter(OMRKK != "Bydel - Uden for inddeling")
+```
+
+### Matching the name formating
+
+I need to make sure that the names in the data frame is the same as in the geojson so that I can combine them later on. 
+
+I am changing the name of the "OMRKK" column in the dataframe to match the "navn" (name) column in the geojson
+
+```{r}
+bfr1850 <-rename(bfr1850, navn = OMRKK)
+```
+
+```{r}
+from1850to1899 <- rename(from1850to1899, navn = OMRKK)
+```
+
+Additionally, This means that I have to remove the "Bydel -" part from the names in the data frame. 
+
+```{r}
+bfr1850$navn[1:10] <-  c("Indre By", "Østerbro", "Nørrebro", "Vesterbro-Kongens Enghave", "Valby", "Vanløse", "Brønshøj-Husum", "Bispebjerg", "Amager Øst", "Amager Vest")
+```
+
+```{r}
+from1850to1899$navn[1:10] <-  c("Indre By", "Østerbro", "Nørrebro", "Vesterbro-Kongens Enghave", "Valby", "Vanløse", "Brønshøj-Husum", "Bispebjerg", "Amager Øst", "Amager Vest")
+```
+
+### Combining the two data frames
+
+At the moment, I have two seperate data frames and I want to combine them using the function inner_join().
+
+```{r}
+bfr1899 <- inner_join(bfr1850, from1850to1899, 
+           by = c("navn", "ENHED", "TID")) # choosing the columns that match
+```
+
+I'm also adding the "INDHOLD" (contents) column together so that it shows the number of buildings before 1899.
+
+(Tutorial consulted: https://dplyr.tidyverse.org/reference/mutate.html)
+
+```{r}
+bfr1899 <-  bfr1899 %>% mutate(combined = INDHOLD.x + INDHOLD.y) 
+# NB: naming the column "combined"
+```
+
+### Combining the two datasets
+
+The last step before creating the map is to combine the two datasets using the merge function.
+(tutorial consulted: https://stackoverflow.com/questions/46695816/merge-csv-and-json-file-in-leaflet-map-strange-mistake)
+
+```{r}
+# Combining by using the "navn" (name) column which the two data sets now have in common.
+bfr1899_map <- merge(districts, bfr1899, by = "navn")
+```
+
+## Creating the Leaflet map
+
+I'm going to create a palette so that the different districts are shaded according to the continuous data.
+
+```{r}
+palette <- colorBin("Blues", bfr1899_map$combined, 10, pretty=TRUE)
+```
+
+Now I can create the second map: 
+
+```{r}
+leaflet(bfr1899_map) %>%
+  addTiles() %>%
+  setView(lng = 12.52840564444299, lat = 55.658326021508024, zoom = 10) %>% 
+  addPolygons(weight = 1,
+              fillColor = ~palette(bfr1899_map$combined), # using palette from before
+              fillOpacity = 0.75,
+              label = ~paste0(navn, ": ", formatC(combined, big.mark = ","))) %>%
+  addLegend("bottomright", pal = palette, values = ~bfr1899_map$combined, 
+            opacity = 1,
+            title = "Number of buildings older than 1899 by district") %>% 
+  addGeoJSON(building_renewal, weight = 2, fillOpacity = 1, color = "orange")
+```
+
+
+# References
+
+## Data Used
+
+* Københavns Kommunes Statistikbank. “KKBYG1.” Accessed August 8, 2023.
+https://kk.statistikbank.dk/statbank5a/SelectVarVal/Define.asp?MainTable=KKBYG1&PLanguage=0&PXSId=0&wsid=cflist.
+* Open Data DK. “Bydele.” Accessed August 8, 2023,
+https://www.opendata.dk/city-of-copenhagen/bydele.
+* Open Data DK. “Byfornyelse.” Accessed August 8, 2023. 
+https://www.opendata.dk/city-of-copenhagen/byfornyelse#resource-byfornyelse.  
+* Open Data DK. “Udsatte byområder.” Accessed August 8, 2023. 
+https://www.opendata.dk/city-of-copenhagen/udsatte-byomrader.
+
+### License for data used
+
+Attribution 4.0 International (CC BY 4.0): 
+https://creativecommons.org/licenses/by/4.0/
+
+## Tutorials and Internet Resources Consulted
+
+* dplyr. "Create, modify, and delete columns." Accessed August 10. https://dplyr.tidyverse.org/reference/mutate.html 
+* Leaflet for R. “Working with GeoJSON & TopoJSON.” Accessed July 31, 2023. 
+https://rstudio.github.io/leaflet/json.html.
+* StackOverflow. "Regular expressions (RegEx) and dplyr::filter()." Accessed August 10. 2023. https://stackoverflow.com/questions/28860069/regular-expressions-regex-and-dplyrfilter
+* StackOverflow. "Merge csv and json file in Leaflet map - strange mistake." Accessed August 10. https://stackoverflow.com/questions/46695816/merge-csv-and-json-file-in-leaflet-map-strange-mistake 
+
+
