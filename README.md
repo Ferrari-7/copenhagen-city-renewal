@@ -10,6 +10,9 @@ The script in this repository does the following:
 3. Combines this data with spatial data showing the different districts of Copenhagen. Makes an accompanying map.
 
 ## Data Used
+
+Data descriptions can be found in the data folder of this repository.
+
 * Københavns Kommunes Statistikbank. “KKBYG1.” Accessed August 8, 2023.
 https://kk.statistikbank.dk/statbank5a/SelectVarVal/Define.asp?MainTable=KKBYG1&PLanguage=0&PXSId=0&wsid=cflist.
 * Open Data DK. “Bydele.” Accessed August 8, 2023,
